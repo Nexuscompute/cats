@@ -246,14 +246,17 @@ final class NonEmptyVector[+A] private (val toVector: Vector[A])
   /**
    * Remove duplicates. Duplicates are checked using `Order[_]` instance.
    */
-  def distinct[AA >: A](implicit O: Order[AA]): NonEmptyVector[AA] = {
-    implicit val ord: Ordering[AA] = O.toOrdering
+  override def distinct[AA >: A](implicit O: Order[AA]): NonEmptyVector[AA] = distinctBy(identity[AA])
 
-    val buf = Vector.newBuilder[AA]
-    tail.foldLeft(TreeSet(head: AA)) { (elementsSoFar, a) =>
-      if (elementsSoFar(a)) elementsSoFar
+  override def distinctBy[B](f: A => B)(implicit O: Order[B]): NonEmptyVector[A] = {
+    implicit val ord: Ordering[B] = O.toOrdering
+
+    val buf = Vector.newBuilder[A]
+    tail.foldLeft(TreeSet(f(head): B)) { (elementsSoFar, a) =>
+      val b = f(a)
+      if (elementsSoFar(b)) elementsSoFar
       else {
-        buf += a; elementsSoFar + a
+        buf += a; elementsSoFar + b
       }
     }
 
@@ -293,7 +296,7 @@ final class NonEmptyVector[+A] private (val toVector: Vector[A])
    * {{{
    * scala> import scala.collection.immutable.SortedMap
    * scala> import cats.data.NonEmptyVector
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val nev = NonEmptyVector.of(12, -2, 3, -5)
    * scala> val expectedResult = SortedMap(false -> NonEmptyVector.of(-2, -5), true -> NonEmptyVector.of(12, 3))
    * scala> val result = nev.groupBy(_ >= 0)
@@ -325,7 +328,7 @@ final class NonEmptyVector[+A] private (val toVector: Vector[A])
    *
    * {{{
    * scala> import cats.data.{NonEmptyMap, NonEmptyVector}
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val nel = NonEmptyVector.of(12, -2, 3, -5)
    * scala> val expectedResult = NonEmptyMap.of(false -> NonEmptyVector.of(-2, -5), true -> NonEmptyVector.of(12, 3))
    * scala> val result = nel.groupByNem(_ >= 0)
@@ -341,7 +344,7 @@ final class NonEmptyVector[+A] private (val toVector: Vector[A])
    *
    * {{{
    * scala> import cats.data.NonEmptyVector
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val nel = NonEmptyVector.of(12, -2, 3, -5)
    * scala> val expectedResult = List(NonEmptyVector.of(12, -2), NonEmptyVector.of(3, -5))
    * scala> val result = nel.grouped(2)
@@ -358,7 +361,7 @@ final class NonEmptyVector[+A] private (val toVector: Vector[A])
    * Creates new `NonEmptyMap`, similarly to List#toMap from scala standard library.
    * {{{
    * scala> import cats.data.{NonEmptyMap, NonEmptyVector}
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val nev = NonEmptyVector((0, "a"), Vector((1, "b"),(0, "c"), (2, "d")))
    * scala> val expectedResult = NonEmptyMap.of(0 -> "c", 1 -> "b", 2 -> "d")
    * scala> val result = nev.toNem
@@ -384,16 +387,14 @@ final class NonEmptyVector[+A] private (val toVector: Vector[A])
 }
 
 @suppressUnusedImportWarningForScalaVersionSpecific
-sealed abstract private[data] class NonEmptyVectorInstances {
+sealed abstract private[data] class NonEmptyVectorInstances extends NonEmptyVectorInstances0 {
 
   @deprecated(
     "maintained for the sake of binary compatibility only - use catsDataInstancesForNonEmptyChainBinCompat1 instead",
     "2.9.0"
   )
-  def catsDataInstancesForNonEmptyVector: SemigroupK[NonEmptyVector]
-    with Bimonad[NonEmptyVector]
-    with NonEmptyTraverse[NonEmptyVector]
-    with Align[NonEmptyVector] =
+  def catsDataInstancesForNonEmptyVector
+    : SemigroupK[NonEmptyVector] & Bimonad[NonEmptyVector] & NonEmptyTraverse[NonEmptyVector] & Align[NonEmptyVector] =
     catsDataInstancesForNonEmptyVectorBinCompat1
 
   /**
@@ -402,10 +403,10 @@ sealed abstract private[data] class NonEmptyVectorInstances {
    *
    * Also see the discussion: PR #3541 and issue #3069.
    */
-  implicit val catsDataInstancesForNonEmptyVectorBinCompat1: NonEmptyAlternative[NonEmptyVector]
-    with Bimonad[NonEmptyVector]
-    with NonEmptyTraverse[NonEmptyVector]
-    with Align[NonEmptyVector] =
+  implicit val catsDataInstancesForNonEmptyVectorBinCompat1
+    : NonEmptyAlternative[NonEmptyVector] & Bimonad[NonEmptyVector] & NonEmptyTraverse[NonEmptyVector] & Align[
+      NonEmptyVector
+    ] =
     new NonEmptyReducible[NonEmptyVector, Vector]
       with NonEmptyAlternative[NonEmptyVector]
       with Bimonad[NonEmptyVector]
@@ -561,7 +562,11 @@ sealed abstract private[data] class NonEmptyVectorInstances {
         NonEmptyVector.fromVectorUnsafe(Align[Vector].alignWith(fa.toVector, fb.toVector)(f))
     }
 
-  implicit def catsDataEqForNonEmptyVector[A: Eq]: Eq[NonEmptyVector[A]] = _ === _
+  implicit def catsDataOrderForNonEmptyVector[A: Order]: Order[NonEmptyVector[A]] =
+    new Order[NonEmptyVector[A]] {
+      override def compare(x: NonEmptyVector[A], y: NonEmptyVector[A]): Int =
+        Order[Vector[A]].compare(x.toVector, y.toVector)
+    }
 
   implicit def catsDataShowForNonEmptyVector[A: Show]: Show[NonEmptyVector[A]] = _.show
 
@@ -633,4 +638,18 @@ object NonEmptyVector extends NonEmptyVectorInstances with Serializable {
 
     implicit def catsDataEqForZipNonEmptyVector[A: Eq]: Eq[ZipNonEmptyVector[A]] = Eq.by(_.value)
   }
+}
+
+sealed abstract private[data] class NonEmptyVectorInstances0 extends NonEmptyVectorInstances1 {
+  implicit def catsDataPartialOrderForNonEmptyVector[A: PartialOrder]: PartialOrder[NonEmptyVector[A]] =
+    PartialOrder.by[NonEmptyVector[A], Vector[A]](_.toVector)
+}
+
+sealed abstract private[data] class NonEmptyVectorInstances1 extends NonEmptyVectorInstances2 {
+  implicit def catsDataHashForNonEmptyVector[A: Hash]: Hash[NonEmptyVector[A]] =
+    Hash.by(_.toVector)
+}
+
+sealed abstract private[data] class NonEmptyVectorInstances2 {
+  implicit def catsDataEqForNonEmptyVector[A: Eq]: Eq[NonEmptyVector[A]] = _ === _
 }

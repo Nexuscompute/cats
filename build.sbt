@@ -1,30 +1,27 @@
-ThisBuild / tlBaseVersion := "2.10"
+ThisBuild / tlBaseVersion := "2.12"
 
-val scalaCheckVersion = "1.17.0"
+val scalaCheckVersion = "1.18.1"
 
-val disciplineVersion = "1.5.1"
+val disciplineVersion = "1.7.0"
 
-val disciplineMunitVersion = "2.0.0-M3"
+val disciplineMunitVersion = "2.0.0"
 
-val munitVersion = "1.0.0-M7"
-
-val kindProjectorVersion = "0.13.2"
+val munitVersion = "1.0.4"
 
 val PrimaryJava = JavaSpec.temurin("8")
 val LTSJava = JavaSpec.temurin("17")
-val GraalVM11 = JavaSpec.graalvm("11")
+val GraalVM = JavaSpec.graalvm("21")
 
-ThisBuild / githubWorkflowJavaVersions := Seq(PrimaryJava, LTSJava, GraalVM11)
+ThisBuild / githubWorkflowJavaVersions := Seq(PrimaryJava, LTSJava, GraalVM)
 
-val Scala212 = "2.12.17"
-val Scala213 = "2.13.10"
-val Scala3 = "3.2.1"
+val Scala212 = "2.12.20"
+val Scala213 = "2.13.16"
+val Scala3 = "3.3.4"
 
 ThisBuild / crossScalaVersions := Seq(Scala212, Scala213, Scala3)
 ThisBuild / scalaVersion := Scala213
 
 ThisBuild / tlFatalWarnings := false
-ThisBuild / tlFatalWarningsInCi := false
 
 ThisBuild / githubWorkflowAddedJobs ++= Seq(
   WorkflowJob(
@@ -34,7 +31,7 @@ ThisBuild / githubWorkflowAddedJobs ++= Seq(
       WorkflowStep.Run(List("cd scalafix", "sbt test"), name = Some("Scalafix tests"))
     ),
     javas = List(PrimaryJava),
-    scalas = List((ThisBuild / scalaVersion).value)
+    scalas = Nil
   )
 )
 
@@ -67,9 +64,15 @@ lazy val commonJsSettings = Seq(
   tlVersionIntroduced ++= List("2.12", "2.13").map(_ -> "2.1.0").toMap
 )
 
-lazy val commonNativeSettings = Seq(
+Global / concurrentRestrictions += Tags.limit(NativeTags.Link, 1)
+
+// Cats 2.12.0 switches to Scala Native 0.5.
+// Therefore `tlVersionIntroduced` should be reset to 2.12.0 for all scala versions in all native cross-projects.
+val commonNativeTlVersionIntroduced = List("2.12", "2.13", "3").map(_ -> "2.12.0").toMap
+
+lazy val commonNativeSettings = Seq[Setting[?]](
   doctestGenTests := Seq.empty,
-  tlVersionIntroduced ++= List("2.12", "2.13").map(_ -> "2.4.0").toMap + ("3" -> "2.8.0")
+  tlVersionIntroduced := commonNativeTlVersionIntroduced
 )
 
 lazy val disciplineDependencies = Seq(
@@ -85,7 +88,7 @@ lazy val testingDependencies = Seq(
   )
 )
 
-lazy val root = tlCrossRootProject
+lazy val cats = tlCrossRootProject
   .aggregate(
     kernel,
     kernelLaws,
@@ -98,7 +101,6 @@ lazy val root = tlCrossRootProject
     tests,
     alleycatsCore,
     alleycatsLaws,
-    alleycatsTests,
     unidocs,
     bench,
     binCompatTest
@@ -124,21 +126,23 @@ lazy val kernelLaws = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .jvmSettings(commonJvmSettings)
   .nativeSettings(commonNativeSettings)
 
-lazy val algebraSettings = Seq[Setting[_]](
+lazy val algebraSettings = Seq[Setting[?]](
   tlMimaPreviousVersions += "2.2.3",
   tlVersionIntroduced := List("2.12", "2.13", "3").map(_ -> "2.7.0").toMap
 )
 
-lazy val algebraNativeSettings = Seq[Setting[_]](
-  tlMimaPreviousVersions ~= (_ - "2.2.3"),
-  tlVersionIntroduced += ("3" -> "2.8.0")
+lazy val algebraNativeSettings = Seq[Setting[?]](
+  // Reset to auto-populate from `tlVersionIntroduced` below.
+  tlMimaPreviousVersions := Set.empty,
+  // Should be reset to the common setting value, because `algebraSettings` re-defines it.
+  tlVersionIntroduced := commonNativeTlVersionIntroduced
 )
 
 lazy val algebra = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("algebra-core"))
   .dependsOn(kernel)
-  .settings(moduleName := "algebra", name := "Cats algebra")
+  .settings(moduleName := "algebra", name := "Cats algebra", scalacOptions -= "-Xsource:3")
   .settings(Compile / sourceGenerators += (Compile / sourceManaged).map(AlgebraBoilerplate.gen).taskValue)
   .jsSettings(commonJsSettings)
   .jvmSettings(commonJvmSettings)
@@ -153,7 +157,7 @@ lazy val algebra = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 lazy val algebraLaws = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .in(file("algebra-laws"))
   .dependsOn(kernelLaws, algebra)
-  .settings(moduleName := "algebra-laws", name := "Cats algebra laws")
+  .settings(moduleName := "algebra-laws", name := "Cats algebra laws", scalacOptions -= "-Xsource:3")
   .settings(disciplineDependencies)
   .settings(testingDependencies)
   .jsSettings(commonJsSettings)
@@ -169,8 +173,7 @@ lazy val core = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .settings(macroSettings)
   .settings(Compile / sourceGenerators += (Compile / sourceManaged).map(Boilerplate.gen).taskValue)
   .settings(
-    libraryDependencies += "org.scalacheck" %%% "scalacheck" % scalaCheckVersion % Test,
-    Compile / doc / scalacOptions ~= { _.filterNot(_.startsWith("-W")) } // weird bug
+    libraryDependencies += "org.scalacheck" %%% "scalacheck" % scalaCheckVersion % Test
   )
   .settings(testingDependencies)
   .jsSettings(commonJsSettings)
@@ -225,21 +228,11 @@ lazy val alleycatsCore = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .nativeSettings(commonNativeSettings)
 
 lazy val alleycatsLaws = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure)
   .in(file("alleycats-laws"))
-  .dependsOn(alleycatsCore, laws)
+  .dependsOn(alleycatsCore, laws, tests % "test-internal -> test")
   .settings(moduleName := "alleycats-laws", name := "Alleycats laws")
   .settings(disciplineDependencies)
   .settings(testingDependencies)
-  .jsSettings(commonJsSettings)
-  .jvmSettings(commonJvmSettings)
-  .nativeSettings(commonNativeSettings)
-
-lazy val alleycatsTests = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .in(file("alleycats-tests"))
-  .dependsOn(alleycatsLaws, tests % "test-internal -> test")
-  .enablePlugins(NoPublishPlugin)
-  .settings(moduleName := "alleycats-tests")
   .jsSettings(commonJsSettings)
   .jvmSettings(commonJvmSettings)
   .nativeSettings(commonNativeSettings)
@@ -259,7 +252,6 @@ lazy val unidocs = project
                                                              alleycatsLaws.jvm,
                                                              testkit.jvm
     ),
-    scalacOptions ~= { _.filterNot(_.startsWith("-W")) }, // weird nsc bug
     ScalaUnidoc / unidoc / scalacOptions ++= Seq("-groups", "-diagrams")
   )
 
@@ -291,12 +283,21 @@ lazy val docs = project
   .enablePlugins(TypelevelSitePlugin)
   .settings(
     tlFatalWarnings := false,
-    laikaConfig ~= { _.withRawContent },
-    tlSiteRelatedProjects := Seq(
-      TypelevelProject.CatsEffect,
-      "Mouse" -> url("https://typelevel.org/mouse"),
-      TypelevelProject.Discipline
-    ),
+    mdocVariables += ("API_LINK_BASE" -> s"https://www.javadoc.io/doc/org.typelevel/cats-docs_2.13/${mdocVariables
+        .value("VERSION")}/"),
+    laikaConfig := {
+      import laika.config._
+
+      laikaConfig.value.withRawContent
+        .withConfigValue("version", mdocVariables.value("VERSION"))
+        .withConfigValue(
+          LinkConfig.empty
+            .addApiLinks(
+              ApiLinks(s"https://www.javadoc.io/doc/org.typelevel/cats-docs_2.13/${mdocVariables.value("VERSION")}/"),
+              ApiLinks(s"https://www.scala-lang.org/api/$Scala213/").withPackagePrefix("scala")
+            )
+        )
+    },
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "discipline-munit" % disciplineMunitVersion
     )

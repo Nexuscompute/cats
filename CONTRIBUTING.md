@@ -96,7 +96,7 @@ git clone git@github.com:typelevel/cats.git
 ```
 
 To build Cats you should have
-[sbt](http://www.scala-sbt.org/0.13/tutorial/Setup.html) and [Node.js](https://nodejs.org/)
+[sbt](https://www.scala-sbt.org/1.x/docs/Setup.html) and [Node.js](https://nodejs.org/)
  installed. If you'd like, you can use the [Nix Cats development environment](#nix-cats-development-environment).
 
  Run `sbt`, and then use any of the following commands:
@@ -133,7 +133,7 @@ builds:
 
 ### Write code
 
-[See guidelines](guidelines.md).
+[See guidelines](https://typelevel.org/cats/guidelines.html).
 
 ### Attributions
 
@@ -189,14 +189,9 @@ The documentation for this website is stored alongside the source, in the [docs 
 
 ### Generating the Site
 
-The microsite generation requires a specific scala version that might
-differ from the project's one. We strongly suggest to check the CI's
-workflow to discover the proper version:
-[CI scala-version matrix](https://github.com/typelevel/cats/blob/main/.github/workflows/ci.yml#L230) and [CI makeMicrosite
-command](https://github.com/typelevel/cats/blob/main/.github/workflows/ci.yml#L281)
+The command is: `sbt docs/tlSite`
 
-At the moment the command is:
-`sbt ++2.12.15 docs/tlSite`
+We suggest checking the CI's workflow to discover any changes at [CI site job](https://github.com/typelevel/cats/blob/v2.9.0/.github/workflows/ci.yml#L418).
 
 ### Previewing the site
 

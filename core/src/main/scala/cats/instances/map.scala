@@ -27,7 +27,7 @@ import cats.kernel.CommutativeMonoid
 import scala.annotation.tailrec
 import cats.arrow.Compose
 
-import cats.data.Ior
+import cats.data.{Chain, Ior}
 
 trait MapInstances extends cats.kernel.instances.MapInstances {
 
@@ -36,21 +36,24 @@ trait MapInstances extends cats.kernel.instances.MapInstances {
       .map { case (a, b) => showA.show(a) + " -> " + showB.show(b) }
       .mkString("Map(", ", ", ")")
 
-  implicit def catsStdInstancesForMap[K]: UnorderedTraverse[Map[K, *]] with FlatMap[Map[K, *]] with Align[Map[K, *]] =
+  implicit def catsStdInstancesForMap[K]: UnorderedTraverse[Map[K, *]] & FlatMap[Map[K, *]] & Align[Map[K, *]] =
     new UnorderedTraverse[Map[K, *]] with FlatMap[Map[K, *]] with Align[Map[K, *]] {
 
       def unorderedTraverse[G[_], A, B](
         fa: Map[K, A]
       )(f: A => G[B])(implicit G: CommutativeApplicative[G]): G[Map[K, B]] = {
-        val gba: Eval[G[Map[K, B]]] = Always(G.pure(Map.empty))
-        val gbb = Foldable
-          .iterateRight(fa, gba) { (kv, lbuf) =>
-            G.map2Eval(f(kv._2), lbuf) { (b, buf) =>
-              buf + (kv._1 -> b)
-            }
+        if (fa.isEmpty) G.pure(Map.empty[K, B])
+        else
+          G match {
+            case x: StackSafeMonad[G] =>
+              fa.iterator.foldLeft(G.pure(Map.empty[K, B])) { case (accG, (k, a)) =>
+                x.map2(accG, f(a)) { case (acc, b) => acc + (k -> b) }
+              }
+            case _ =>
+              G.map(Chain.traverseViaChain(fa.toIndexedSeq) { case (k, a) =>
+                G.map(f(a))((k, _))
+              })(_.iterator.toMap)
           }
-          .value
-        G.map(gbb)(_.toMap)
       }
 
       override def map[A, B](fa: Map[K, A])(f: A => B): Map[K, B] =
@@ -138,7 +141,7 @@ private[instances] trait MapInstancesBinCompat0 {
      * Compose two maps `g` and `f` by using the values in `f` as keys for `g`.
      * {{{
      * scala> import cats.arrow.Compose
-     * scala> import cats.implicits._
+     * scala> import cats.syntax.all._
      * scala> val first = Map(1 -> "a", 2 -> "b", 3 -> "c", 4 -> "a")
      * scala> val second = Map("a" -> true, "b" -> false, "d" -> true)
      * scala> Compose[Map].compose(second, first)

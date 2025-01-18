@@ -1,5 +1,7 @@
 # ApplicativeError and MonadError
 
+API Documentation: @:api(cats.ApplicativeError), @:api(cats.MonadError)
+
 ## Applicative Error
 
 ### Description
@@ -40,7 +42,7 @@ create multiple functions with different "container" types.
 
 ```scala mdoc:silent
 import cats._
-import cats.implicits._
+import cats.syntax.all._
 
 def attemptDivideApplicativeError[F[_]](x: Int, y: Int)(implicit ae: ApplicativeError[F, String]): F[Int] = {
    if (y == 0) ae.raiseError("divisor is error")
@@ -86,7 +88,7 @@ when calling `attemptDivideApplicativeError`. Notice that
 so we make no other changes.
 
 ```scala mdoc:silent
-import cats.implicits._
+import cats.syntax.all._
 import cats.data.Validated
 
 type MyValidated[A] = Validated[String, A]
@@ -115,7 +117,7 @@ we are using `Applicative`'s `map2`, and of course, `pure` which also is a
 form of `Applicative`.
 
 ```scala mdoc:silent
-import cats.implicits._
+import cats.syntax.all._
 def attemptDivideApplicativeErrorWithMap2[F[_]](x: Int, y: Int)(implicit ae: ApplicativeError[F, String]): F[_] = {
    if (y == 0) ae.raiseError("divisor is error")
    else {
@@ -137,7 +139,7 @@ into the `handler` method, where this method will pattern match on the message
 and provide an alternative outcome.
 
 ```scala mdoc:silent
-import cats.implicits._
+import cats.syntax.all._
 def attemptDivideApplicativeErrorAbove2[F[_]](x: Int, y: Int)(implicit ae: ApplicativeError[F, String]): F[Int] =
   if (y == 0) ae.raiseError("Bad Math")
   else if (y == 1) ae.raiseError("Waste of Time")
@@ -174,6 +176,42 @@ Running the following will result in `Right(0)`
 handlerErrorWith(attemptDivideApplicativeErrorAbove2(3, 0))
 ```
 
+### Handling Exceptions
+There will inevitably come a time when your nice `ApplicativeError` code will
+have to interact with exception-throwing code. Handling such situations is easy
+enough.
+
+```scala mdoc
+def parseInt[F[_]](input: String)(implicit F: ApplicativeError[F, Throwable]): F[Int] =
+  try {
+    F.pure(input.toInt)
+  } catch {
+    case nfe: NumberFormatException => F.raiseError(nfe)
+  }
+
+parseInt[Either[Throwable, *]]("123")
+parseInt[Either[Throwable, *]]("abc")
+```
+
+However, this can get tedious quickly. `ApplicativeError` has a `catchOnly`
+method that allows you to pass it a function, along with the type of exception
+you want to catch, and does the above for you.
+
+```scala mdoc:nest
+def parseInt[F[_]](input: String)(implicit F: ApplicativeError[F, Throwable]): F[Int] =
+  F.catchOnly[NumberFormatException](input.toInt)
+
+parseInt[Either[Throwable, *]]("abc")
+```
+
+If you want to catch all (non-fatal) throwables, you can use `catchNonFatal`.
+
+```scala mdoc:nest
+def parseInt[F[_]](input: String)(implicit F: ApplicativeError[F, Throwable]): F[Int] = F.catchNonFatal(input.toInt)
+
+parseInt[Either[Throwable, *]]("abc")
+```
+
 ## MonadError
 
 ### Description
@@ -188,7 +226,7 @@ The Definition for `MonadError` extends `Monad` which provides the
 methods, `flatMap`, `whileM_`.  `MonadError` also provides error 
 handling methods like `ensure`, `ensureOr`, `adaptError`, `rethrow`.
 
-```
+```scala
 trait MonadError[F[_], E] extends ApplicativeError[F, E] with Monad[F] {
   def ensure[A](fa: F[A])(error: => E)(predicate: A => Boolean): F[A] 
   def ensureOr[A](fa: F[A])(error: A => E)(predicate: A => Boolean): F[A]
@@ -223,16 +261,16 @@ With the methods that we will compose in place let's create a method that will
 compose the above methods using a for comprehension which
 interprets to a `flatMap`-`map` combination.  
 
-`getTemperatureFromByCoordinates` parameterized type 
-`[F[_]:MonadError[*[_], String]` injects `F[_]` into `MonadError[*[_], String]`
+`getTemperatureByCoordinates`'s parameterized type
+`[F[_]:MonadError[*[_], String]` injects `F[_]` into `MonadError[*[_], String]`;
 thus if the "error type" you wish to use is `Either[String, *]`, the `Either`
 would be placed in the hole of `MonadError`, in this case, 
 `MonadError[Either[String, *], String]`
 
-`getTemperatureFromByCoordinates` accepts a `Tuple2` of `Int` and `Int`, and we
-return `F` which represents our `MonadError` which can be a type like `Either` or
-`Validated`. In the method, since either `getCityClosestToCoordinate` and
-`getTemperatureByCity` both return potential error types and they are monadic we can
+`getTemperatureByCoordinates` accepts a `Tuple2` of `Int` and `Int` and
+returns `F`, which represents our `MonadError`, which can be a type like `Either` or
+`Validated`. In the method, since `getCityClosestToCoordinate` and
+`getTemperatureByCity` both return potential error types and they are monadic, we can
 compose them with a for comprehension.
 
 ```scala mdoc:silent
@@ -242,17 +280,14 @@ def getTemperatureByCoordinates[F[_]: MonadError[*[_], String]](x: (Int, Int)): 
 }
 ``` 
 
-Invoking `getTemperatureByCoordinates` we can call it with the following sample, 
-which will return `78`. 
-
-NOTE: infix `->` creates a `Tuple2`. `1 -> "Bob"` is the same as `(1, "Bob")`
+We can call `getTemperatureByCoordinates` with the following sample, which will return `78`.
 
 ```scala mdoc:silent
 type MyEither[A] = Either[String, A]
-getTemperatureByCoordinates[MyEither](44 -> 93)
+getTemperatureByCoordinates[MyEither]((44, 93))
 ```
 
-With TypeLevel Cats, how you structure your methods is up to you, if you wanted to
+With TypeLevel Cats, how you structure your methods is up to you: if you wanted to
 create `getTemperatureByCoordinates` without a Scala 
 [context bound](https://docs.scala-lang.org/tutorials/FAQ/context-bounds.html) for `MonadError`,
 but create an `implicit` parameter for your `MonadError` you can have access to some 
@@ -264,7 +299,7 @@ specialized methods, like `raiseError`, to raise an error representation
 when things go wrong.
 
 ```scala mdoc:silent
-def getTemperatureFromByCoordinatesAlternate[F[_]](x: (Int, Int))(implicit me: MonadError[F, String]): F[Int] = {
+def getTemperatureByCoordinatesAlternate[F[_]](x: (Int, Int))(implicit me: MonadError[F, String]): F[Int] = {
   if (x._1 < 0 || x._2 < 0) me.raiseError("Invalid Coordinates")
   else for { c <- getCityClosestToCoordinate[F](x)
         t <- getTemperatureByCity[F](c) } yield t

@@ -140,10 +140,10 @@ abstract class SemigroupFunctions[S[T] <: Semigroup[T]] {
     }
 
   def isCommutative[A](implicit ev: S[A]): Boolean =
-    ev.isInstanceOf[CommutativeSemigroup[_]]
+    ev.isInstanceOf[CommutativeSemigroup[?]]
 
   def isIdempotent[A](implicit ev: S[A]): Boolean =
-    ev.isInstanceOf[Band[_]]
+    ev.isInstanceOf[Band[?]]
 
   def combineN[@sp(Int, Long, Float, Double) A](a: A, n: Int)(implicit ev: S[A]): A =
     ev.combineN(a, n)
@@ -178,9 +178,12 @@ object Semigroup
    */
   @inline def last[A]: Semigroup[A] = (_, y) => y
 
+  @inline def intercalate[A](sep: A)(implicit ev: Semigroup[A]): Semigroup[A] =
+    ev.intercalate(sep)
+
   implicit def catsKernelBoundedSemilatticeForBitSet: BoundedSemilattice[BitSet] =
     cats.kernel.instances.bitSet.catsKernelStdSemilatticeForBitSet
-  implicit def catsKernelInstancesForUnit: BoundedSemilattice[Unit] with CommutativeGroup[Unit] =
+  implicit def catsKernelInstancesForUnit: BoundedSemilattice[Unit] & CommutativeGroup[Unit] =
     cats.kernel.instances.unit.catsKernelStdAlgebraForUnit
   implicit def catsKernelCommutativeGroupForByte: CommutativeGroup[Byte] =
     cats.kernel.instances.byte.catsKernelStdGroupForByte

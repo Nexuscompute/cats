@@ -39,7 +39,7 @@ trait Align[F[_]] extends Serializable {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> import cats.data.Ior
    * scala> Align[List].align(List(1, 2), List(10, 11, 12))
    * res0: List[Ior[Int, Int]] = List(Both(1,10), Both(2,11), Right(12))
@@ -52,7 +52,7 @@ trait Align[F[_]] extends Serializable {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> Align[List].alignWith(List(1, 2), List(10, 11, 12))(_.mergeLeft)
    * res0: List[Int] = List(1, 2, 12)
    * }}}
@@ -65,7 +65,7 @@ trait Align[F[_]] extends Serializable {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> Align[List].alignCombine(List(1, 2), List(10, 11, 12))
    * res0: List[Int] = List(11, 13, 12)
    * }}}
@@ -78,20 +78,20 @@ trait Align[F[_]] extends Serializable {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> Align[List].alignMergeWith(List(1, 2), List(10, 11, 12))(_ + _)
    * res0: List[Int] = List(11, 13, 12)
    * }}}
    */
   def alignMergeWith[A](fa1: F[A], fa2: F[A])(f: (A, A) => A): F[A] =
-    functor.map(align(fa1, fa2))(_.mergeWith(f))
+    alignWith(fa1, fa2)(_.mergeWith(f))
 
   /**
    * Same as `align`, but forgets from the type that one of the two elements must be present.
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> Align[List].padZip(List(1, 2), List(10))
    * res0: List[(Option[Int], Option[Int])] = List((Some(1),Some(10)), (Some(2),None))
    * }}}
@@ -104,7 +104,7 @@ trait Align[F[_]] extends Serializable {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> Align[List].padZipWith(List(1, 2), List(10, 11, 12))(_ |+| _)
    * res0: List[Option[Int]] = List(Some(11), Some(13), Some(12))
    * }}}
@@ -120,7 +120,7 @@ trait Align[F[_]] extends Serializable {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> Align[List].zipAll(List(1, 2), List(10, 11, 12), 20, 21)
    * res0: List[(Int, Int)] = List((1,10), (2,11), (20,12))
    * }}}
@@ -145,6 +145,7 @@ object Align extends ScalaVersionSpecificAlignInstances {
   implicit def catsAlignForSortedMap[K]: Align[SortedMap[K, *]] =
     cats.instances.sortedMap.catsStdInstancesForSortedMap[K]
   implicit def catsAlignForEither[A]: Align[Either[A, *]] = cats.instances.either.catsStdInstancesForEither[A]
+  implicit def catsAlignForId: Align[Id] = cats.catsAlignForId
 
   private[cats] def alignWithIterator[A, B, C](fa: Iterable[A], fb: Iterable[B])(f: Ior[A, B] => C): Iterator[C] =
     new Iterator[C] {

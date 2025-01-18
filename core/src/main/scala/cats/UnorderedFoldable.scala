@@ -36,6 +36,27 @@ trait UnorderedFoldable[F[_]] extends Serializable {
     unorderedFoldMap(fa)(identity)
 
   /**
+   * Fold in a [[CommutativeApplicative]] context by mapping the `A` values to `G[B]`. combining
+   * the `B` values using the given `CommutativeMonoid[B]` instance.
+   *
+   * {{{
+   * scala> import cats.UnorderedFoldable
+   * scala> import cats.syntax.all._
+   * scala> val evenNumbers = Set(2,4,6,8,10)
+   * scala> val evenOpt: Int => Option[Int] =
+   *      |   i => if (i % 2 == 0) Some(i) else None
+   * scala> UnorderedFoldable[Set].unorderedFoldMapA(evenNumbers)(evenOpt)
+   * res0: Option[Int] = Some(30)
+   * scala> UnorderedFoldable[Set].unorderedFoldMapA(evenNumbers + 11)(evenOpt)
+   * res1: Option[Int] = None
+   * }}}
+   */
+  def unorderedFoldMapA[G[_], A, B](fa: F[A])(
+    f: A => G[B]
+  )(implicit G: CommutativeApplicative[G], B: CommutativeMonoid[B]): G[B] =
+    unorderedFoldMap(fa)(f)(CommutativeApplicative.commutativeMonoidFor)
+
+  /**
    * Tests if `fa` contains `v` using the `Eq` instance for `A`
    */
   def contains_[A](fa: F[A], v: A)(implicit ev: Eq[A]): Boolean =
@@ -81,7 +102,7 @@ trait UnorderedFoldable[F[_]] extends Serializable {
    *
    * For example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val map1 = Map[Int, String]()
    * scala> val p1: String => Boolean = _.length > 0
    * scala> UnorderedFoldable[Map[Int, *]].count(map1)(p1)
@@ -98,9 +119,14 @@ trait UnorderedFoldable[F[_]] extends Serializable {
     unorderedFoldMap(fa)(a => if (p(a)) 1L else 0L)
 }
 
+private[cats] trait UnorderedFoldableLowPriority {
+  implicit def catsTraverseForSeq: Traverse[Seq] = cats.instances.seq.catsStdInstancesForSeq
+}
+
 object UnorderedFoldable
     extends ScalaVersionSpecificTraverseInstances
-    with cats.instances.NTupleUnorderedFoldableInstances {
+    with cats.instances.NTupleUnorderedFoldableInstances
+    with UnorderedFoldableLowPriority {
 
   private val orEvalMonoid: CommutativeMonoid[Eval[Boolean]] = new CommutativeMonoid[Eval[Boolean]] {
     val empty: Eval[Boolean] = Eval.False
@@ -125,7 +151,6 @@ object UnorderedFoldable
   implicit def catsNonEmptyTraverseForId: NonEmptyTraverse[Id] = catsInstancesForId
   implicit def catsTraverseForOption: Traverse[Option] = cats.instances.option.catsStdInstancesForOption
   implicit def catsTraverseForList: Traverse[List] = cats.instances.list.catsStdInstancesForList
-  implicit def catsTraverseForSeq: Traverse[Seq] = cats.instances.seq.catsStdInstancesForSeq
   implicit def catsTraverseForVector: Traverse[Vector] = cats.instances.vector.catsStdInstancesForVector
   implicit def catsTraverseForQueue: Traverse[Queue] = cats.instances.queue.catsStdInstancesForQueue
   implicit def catsUnorderedTraverseForSet: UnorderedTraverse[Set] = cats.instances.set.catsStdInstancesForSet
@@ -140,7 +165,7 @@ object UnorderedFoldable
   implicit def catsTraverseForTry: Traverse[Try] = cats.instances.try_.catsStdInstancesForTry
 
   @deprecated("Use catsStdInstancesForTuple2 in cats.instances.NTupleMonadInstances", "2.4.0")
-  def catsInstancesForTuple[A]: Traverse[(A, *)] with Reducible[(A, *)] =
+  def catsInstancesForTuple[A]: Traverse[(A, *)] & Reducible[(A, *)] =
     cats.instances.tuple.catsStdInstancesForTuple2[A]
 
   /**
@@ -166,6 +191,10 @@ object UnorderedFoldable
     def unorderedFoldMap[B](f: A => B)(implicit ev$1: CommutativeMonoid[B]): B =
       typeClassInstance.unorderedFoldMap[A, B](self)(f)
     def unorderedFold(implicit ev$1: CommutativeMonoid[A]): A = typeClassInstance.unorderedFold[A](self)
+    def unorderedFoldMapA[G[_], B](
+      f: A => G[B]
+    )(implicit ev$1: CommutativeApplicative[G], ev$2: CommutativeMonoid[B]): G[B] =
+      typeClassInstance.unorderedFoldMapA[G, A, B](self)(f)
     def isEmpty: Boolean = typeClassInstance.isEmpty[A](self)
     def nonEmpty: Boolean = typeClassInstance.nonEmpty[A](self)
     def exists(p: A => Boolean): Boolean = typeClassInstance.exists[A](self)(p)
@@ -185,5 +214,4 @@ object UnorderedFoldable
   }
   @deprecated("Use cats.syntax object imports", "2.2.0")
   object nonInheritedOps extends ToUnorderedFoldableOps
-
 }

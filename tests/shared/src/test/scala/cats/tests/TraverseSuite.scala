@@ -22,7 +22,9 @@
 package cats.tests
 
 import cats._
+import cats.data.Chain
 import cats.kernel.compat.scalaVersionSpecific._
+import cats.laws.discipline.arbitrary._
 import cats.syntax.all._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Prop._
@@ -83,9 +85,9 @@ abstract class TraverseSuite[F[_]: Traverse](name: String)(implicit ArbFInt: Arb
     }
   }
 
-  test(s"Traverse[$name].traverse matches traverse_ with Option") {
+  test(s"Traverse[$name].traverse matches traverseVoid with Option") {
     forAll { (fa: F[Int], fn: Int => Option[Int]) =>
-      assert(Applicative[Option].void(fa.traverse(fn)) == fa.traverse_(fn))
+      assert(Applicative[Option].void(fa.traverse(fn)) == fa.traverseVoid(fn))
     }
   }
 
@@ -119,6 +121,7 @@ object TraverseSuite {
 
 class TraverseListSuite extends TraverseSuite[List]("List")
 class TraverseVectorSuite extends TraverseSuite[Vector]("Vector")
+class TraverseChainSuite extends TraverseSuite[Chain]("Chain")
 
 @annotation.nowarn("cat=deprecation")
 class TraverseStreamSuite extends TraverseSuite[Stream]("Stream")

@@ -33,8 +33,7 @@ import scala.util.Try
 
 trait QueueInstances extends cats.kernel.instances.QueueInstances {
 
-  implicit val catsStdInstancesForQueue
-    : Traverse[Queue] with Alternative[Queue] with Monad[Queue] with CoflatMap[Queue] =
+  implicit val catsStdInstancesForQueue: Traverse[Queue] & Alternative[Queue] & Monad[Queue] & CoflatMap[Queue] =
     new Traverse[Queue] with Alternative[Queue] with Monad[Queue] with CoflatMap[Queue] {
       def empty[A]: Queue[A] = Queue.empty
 
@@ -121,13 +120,29 @@ trait QueueInstances extends cats.kernel.instances.QueueInstances {
       def traverse[G[_], A, B](fa: Queue[A])(f: A => G[B])(implicit G: Applicative[G]): G[Queue[B]] =
         if (fa.isEmpty) G.pure(Queue.empty[B])
         else
-          G.map(Chain.traverseViaChain {
-            val as = collection.mutable.ArrayBuffer[A]()
-            as ++= fa
-            wrapMutableIndexedSeq(as)
-          }(f)) { chain =>
-            chain.foldLeft(Queue.empty[B])(_ :+ _)
+          G match {
+            case x: StackSafeMonad[G] =>
+              G.map(Traverse.traverseDirectly(fa)(f)(x))(c => fromIterableOnce(c.iterator))
+            case _ =>
+              G.map(Chain.traverseViaChain {
+                val as = collection.mutable.ArrayBuffer[A]()
+                as ++= fa
+                wrapMutableIndexedSeq(as)
+              }(f)) { chain =>
+                chain.foldLeft(Queue.empty[B])(_ :+ _)
+              }
           }
+
+      override def traverseVoid[G[_], A, B](fa: Queue[A])(f: A => G[B])(implicit G: Applicative[G]): G[Unit] =
+        G match {
+          case x: StackSafeMonad[G] => Traverse.traverseVoidDirectly(fa)(f)(x)
+          case _ =>
+            foldRight(fa, Eval.now(G.unit)) { (a, acc) =>
+              G.map2Eval(f(a), acc) { (_, _) =>
+                ()
+              }
+            }.value
+        }
 
       override def mapAccumulate[S, A, B](init: S, fa: Queue[A])(f: (S, A) => (S, B)): (S, Queue[B]) =
         StaticMethods.mapAccumulateFromStrictFunctor(init, fa, f)(this)
@@ -207,7 +222,7 @@ trait QueueInstances extends cats.kernel.instances.QueueInstances {
 @suppressUnusedImportWarningForScalaVersionSpecific
 private object QueueInstances {
   private val catsStdTraverseFilterForQueue: TraverseFilter[Queue] = new TraverseFilter[Queue] {
-    val traverse: Traverse[Queue] = cats.instances.queue.catsStdInstancesForQueue
+    val traverse: Traverse[Queue] & Alternative[Queue] = cats.instances.queue.catsStdInstancesForQueue
 
     override def mapFilter[A, B](fa: Queue[A])(f: (A) => Option[B]): Queue[B] =
       fa.collect(Function.unlift(f))
@@ -223,12 +238,17 @@ private object QueueInstances {
     def traverseFilter[G[_], A, B](fa: Queue[A])(f: (A) => G[Option[B]])(implicit G: Applicative[G]): G[Queue[B]] =
       if (fa.isEmpty) G.pure(Queue.empty[B])
       else
-        G.map(Chain.traverseFilterViaChain {
-          val as = collection.mutable.ArrayBuffer[A]()
-          as ++= fa
-          wrapMutableIndexedSeq(as)
-        }(f)) { chain =>
-          chain.foldLeft(Queue.empty[B])(_ :+ _)
+        G match {
+          case x: StackSafeMonad[G] =>
+            x.map(TraverseFilter.traverseFilterDirectly(fa)(f)(x))(c => traverse.fromIterableOnce(c.iterator))
+          case _ =>
+            G.map(Chain.traverseFilterViaChain {
+              val as = collection.mutable.ArrayBuffer[A]()
+              as ++= fa
+              wrapMutableIndexedSeq(as)
+            }(f)) { chain =>
+              chain.foldLeft(Queue.empty[B])(_ :+ _)
+            }
         }
 
     override def filterA[G[_], A](fa: Queue[A])(f: (A) => G[Boolean])(implicit G: Applicative[G]): G[Queue[A]] =

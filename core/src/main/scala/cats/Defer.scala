@@ -34,7 +34,7 @@ import scala.util.control.TailCalls.TailRec
  * so
  * {{{
  * scala> import cats._
- * scala> import cats.implicits._
+ * scala> import cats.syntax.all._
  *
  * scala> var evaluated = false
  * scala> val dfa = Defer[Eval].defer {
@@ -72,12 +72,44 @@ trait Defer[F[_]] extends Serializable {
     lazy val res: F[A] = fn(defer(res))
     res
   }
+
+  /**
+   * Useful when you want a recursive function that returns F where
+   * F[_]: Defer. Examples include IO, Eval, or transformers such
+   * as EitherT or OptionT.
+   * 
+   * example:
+   *
+   * val sumTo: Int => Eval[Int] =
+   *   Defer[Eval].recursiveFn[Int, Int] { recur =>
+   *     
+   *     { i =>
+   *       if (i > 0) recur(i - 1).map(_ + i)
+   *       else Eval.now(0)
+   *     }
+   *   }
+   */
+  def recursiveFn[A, B](fn: (A => F[B]) => (A => F[B])): A => F[B] =
+    new Function1[A, F[B]] { self =>
+      val loopFn: A => F[B] = fn(self)
+
+      def apply(a: A): F[B] = defer(loopFn(a))
+    }
 }
 
 object Defer {
   def apply[F[_]](implicit defer: Defer[F]): Defer[F] = defer
 
+  implicit def catsDeferForEq: Defer[Eq] = cats.implicits.catsDeferForEq
+  implicit def catsDeferForEquiv: Defer[Equiv] = cats.implicits.catsDeferForEquiv
   implicit def catsDeferForFunction0: Defer[Function0] = cats.instances.function.catsSddDeferForFunction0
   implicit def catsDeferForFunction1[A]: Defer[Function1[A, *]] = cats.instances.function.catsStdDeferForFunction1[A]
+  implicit def catsDeferForHash: Defer[Hash] = cats.implicits.catsDeferForHash
+  implicit def catsDeferForOrder: Defer[Order] = cats.instances.order.catsDeferForOrder
+  implicit def catsStdDeferForOrdering: Defer[Ordering] = cats.instances.ordering.catsStdDeferForOrdering
+  implicit def catsDeferForPartialOrder: Defer[PartialOrder] = cats.instances.partialOrder.catsDeferForPartialOrder
+  implicit def catsStdDeferForPartialOrdering: Defer[PartialOrdering] =
+    cats.instances.partialOrdering.catsStdDeferForPartialOrdering
+  implicit def catsDeferForShow: Defer[Show] = cats.implicits.catsDeferForShow
   implicit def catsDeferForTailRec: Defer[TailRec] = cats.instances.tailRec.catsInstancesForTailRec
 }

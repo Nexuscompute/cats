@@ -39,9 +39,6 @@ class KleisliSuite extends CatsSuite {
   implicit def kleisliEq[F[_], A, B](implicit ev: Eq[A => F[B]]): Eq[Kleisli[F, A, B]] =
     Eq.by[Kleisli[F, A, B], A => F[B]](_.run)
 
-  implicit def readerEq[A, B](implicit ev: Eq[A => B]): Eq[Reader[A, B]] =
-    kleisliEq
-
   implicit val eitherTEq: Eq[EitherT[Kleisli[Option, MiniInt, *], Unit, Int]] =
     EitherT.catsDataEqForEitherT[Kleisli[Option, MiniInt, *], Unit, Int]
   implicit val eitherTEq2: Eq[EitherT[Reader[MiniInt, *], Unit, Int]] =
@@ -381,16 +378,16 @@ class KleisliSuite extends CatsSuite {
     assertEquals(program.run(A123), List((1, "2", true)))
   }
 
-  test("traverse_ doesn't stack overflow") {
+  test("traverseVoid doesn't stack overflow") {
     // see: https://github.com/typelevel/cats/issues/3947
-    val resL = (1 to 10000).toList.traverse_(_ => Kleisli.liftF[Id, String, Unit](())).run("")
-    val resV = (1 to 10000).toVector.traverse_(_ => Kleisli.liftF[Id, String, Unit](())).run("")
+    val resL = (1 to 10000).toList.traverseVoid(_ => Kleisli.liftF[Id, String, Unit](())).run("")
+    val resV = (1 to 10000).toVector.traverseVoid(_ => Kleisli.liftF[Id, String, Unit](())).run("")
     assert(resL === resV)
   }
 
-  test("traverse_ doesn't stack overflow with List + Eval") {
+  test("traverseVoid doesn't stack overflow with List + Eval") {
     // see: https://github.com/typelevel/cats/issues/3947
-    (1 to 10000).toList.traverse_(_ => Kleisli.liftF[Eval, String, Unit](Eval.Unit)).run("").value
+    (1 to 10000).toList.traverseVoid(_ => Kleisli.liftF[Eval, String, Unit](Eval.Unit)).run("").value
   }
 
   /**

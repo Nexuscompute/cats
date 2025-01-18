@@ -24,7 +24,7 @@ package cats.tests
 import cats.Applicative
 import cats.data.NonEmptyList
 import cats.arrow.FunctionK
-import cats.implicits._
+import cats.syntax.all._
 import org.scalacheck.Prop._
 import cats.laws.discipline.arbitrary._
 
@@ -69,14 +69,6 @@ class FunctionKLiftSuite extends CatsSuite {
     val fSomeNel = FunctionK.lift[NonEmptyList, OptionOfNel](Applicative[Option].pure)
     forAll { (a: NonEmptyList[Int]) =>
       assert(fSomeNel(a) === Some(a))
-    }
-  }
-
-  test("lift a function directly") {
-    def headOption[A](list: List[A]): Option[A] = list.headOption
-    val fHeadOption = FunctionK.liftFunction[List, Option](headOption)
-    forAll { (a: List[Int]) =>
-      assert(fHeadOption(a) === a.headOption)
     }
   }
 

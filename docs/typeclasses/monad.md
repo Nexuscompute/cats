@@ -1,5 +1,7 @@
 # Monad
 
+API Documentation: @:api(cats.Monad)
+
 `Monad` extends the [`Applicative`](applicative.md) type class with a
 new function `flatten`. Flatten takes a value in a nested context (eg.
 `F[F[A]]` where F is the context) and "joins" the contexts together so
@@ -29,7 +31,7 @@ the identity function `x => x` (i.e. `flatMap(_)(x => x)`).
 ```scala mdoc:silent
 import cats._
 
-implicit def optionMonad(implicit app: Applicative[Option]) =
+implicit def optionMonad(implicit app: Applicative[Option]): Monad[Option] =
   new Monad[Option] {
     // Define flatMap using Option's flatten method
     override def flatMap[A, B](fa: Option[A])(f: A => Option[B]): Option[B] =
@@ -86,7 +88,7 @@ and therefore stack safe implementation of `tailRecM`.
 import cats.Monad
 import scala.annotation.tailrec
 
-implicit val optionMonad = new Monad[Option] {
+implicit val optionMonad: Monad[Option] = new Monad[Option] {
   def flatMap[A, B](fa: Option[A])(f: A => Option[B]): Option[B] = fa.flatMap(f)
   def pure[A](a: A): Option[A] = Some(a)
 
@@ -109,7 +111,7 @@ the results of earlier ones. This is embodied in `ifM`, which lifts an `if`
 statement into the monadic context.
 
 ```scala mdoc
-import cats.implicits._
+import cats.syntax.all._
 
 Monad[List].ifM(List(true, false, true))(ifTrue = List(1, 2), ifFalse = List(3, 4))
 ```
@@ -128,7 +130,7 @@ example).
 
 ```scala mdoc:silent:reset
 import cats.Monad
-import cats.implicits._
+import cats.syntax.all._
 
 case class OptionT[F[_], A](value: F[Option[A]])
 

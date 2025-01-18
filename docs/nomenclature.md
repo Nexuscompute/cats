@@ -14,16 +14,17 @@ _WARNING_: this page is written manually, and not automatically generated, so ma
 
 ### Functor
 
-| Type          | Method Name  |
-| ------------- |--------------|
-| `F[A] => F[Unit]`  | `void`   |
-| `F[A] => B => F[B]`  | `as`   |
-| `F[A] => (A => B) => F[B]` | `map`   |
-| `F[A] => (A => B) => F[(A,B)]` | `fproduct`   |
-| `F[A] => (A => B) => F[(B,A)]` | `fproductLeft`   |
-| `F[A] => B => F[(B, A)]`  | `tupleLeft`  |
-| `F[A] => B => F[(A, B)]`  | `tupleRight` |
-| `(A => B) => (F[A] => F[B])` | `lift`   |
+| Type                           | Method Name    | Notes |
+|--------------------------------|----------------|-------|
+| `F[A] => F[Unit]`              | `void`         |
+| `F[A] => B => F[B]`            | `as`           |
+| `F[A] => (A => B) => F[B]`     | `map`          |
+| `F[A] => (A => A1) => F[A1])`  | `mapOrKeep`    | A1 >: A, the (A => A1) is a PartialFunction
+| `F[A] => (A => B) => F[(A,B)]` | `fproduct`     |
+| `F[A] => (A => B) => F[(B,A)]` | `fproductLeft` |
+| `F[A] => B => F[(B, A)]`       | `tupleLeft`    |
+| `F[A] => B => F[(A, B)]`       | `tupleRight`   |
+| `(A => B) => (F[A] => F[B])`   | `lift`         |
 
 ### Apply
 
@@ -110,14 +111,14 @@ Like the previous section, we use the `E` for the error parameter type.
 | Type          | Method Name  | Constraints
 | ------------- |--------------|-----------
 | `F[A] => A` | `fold` | `A: Monoid`
-| `F[A] => B => ((B,A) => B) => F[B]` | `foldLeft`
+| `F[A] => B => ((B,A) => B) => B` | `foldLeft`
 | `F[A] => (A => B) => B` | `foldMap` | `B: Monoid`
 | `F[A] => (A => G[B]) => G[B]` | `foldMapM` | `G: Monad` and `B: Monoid`
 | `F[A] => (A => B) => Option[B]` | `collectFirst` | The `A => B` is a `PartialFunction`
 | `F[A] => (A => Option[B]) => Option[B]` | `collectFirstSome` |
 | `F[A] => (A => G[B]) => G[Unit]` | `traverse_` | `G: Applicative`
 | `F[G[A]] => G[Unit]` | `sequence_` | `G: Applicative`
-| `F[A] => (A => Either[B, C] => (F[B], F[C])` | `partitionEither` | `G: Applicative`
+| `F[A] => (A => Either[B, C]) => (F[B], F[C])` | `partitionEither` | `G: Applicative`
 
 ### Reducible
 
@@ -136,7 +137,7 @@ Like the previous section, we use the `E` for the error parameter type.
 | `F[G[F[A]]] => G[F[A]]` | `flatSequence` | `G: Applicative` and `F: FlatMap`
 | `F[A] => F[(A,Int)]` | `zipWithIndex` |
 | `F[A] => ((A,Int) => B) => F[B]` | `mapWithIndex` |
-| `F[A] => ((A,Int) => G[B]) => G[F[B]]` | `traverseWithIndex` | `F: Monad`
+| `F[A] => ((A,Int) => G[B]) => G[F[B]]` | `traverseWithIndexM` | `F: Monad`
 
 ### SemigroupK
 | Type         | Method Name  | Constraints |
@@ -196,13 +197,17 @@ For convenience, in these types we use the symbol `OT` to abbreviate `OptionT`.
 | `=> OT[F, A]` | `none` | `F: Applicative` |
 | `A => OT[F, A]` | `some` or `pure` | `F: Applicative`
 | `F[A] => OT[F, A]` | `liftF`  | `F: Functor`
+| `Boolean => F[A] => OT[F, A]` | `whenF` | `F: Applicative`
+| `F[Boolean] => F[A] => OT[F, A]` | `whenM` | `F: Monad`
 | `OT[F, A] => F[Option[A]]` | `value`
+| `OT[F, A] => A => Boolean => OT[F, A]` | `filter` | `F: Functor`
+| `OT[F, A] => A => F[Boolean] => OT[F, A]` | `filterF` | `F: Monad`
 | `OT[F, A] => (A => B) => OT[F, B]` | `map`  | `F: Functor`
 | `OT[F, A] => (F ~> G) => OT[G, B]` | `mapK`
 | `OT[F, A] => (A => Option[B]) => OT[F, B]` | `mapFilter` | `F: Functor`
 | `OT[F, A] => B => (A => B) => F[B]` | `fold` or `cata`
 | `OT[F, A] => (A => OT[F, B]) => OT[F,B]` | `flatMap`
-| `OT[F, A] => (A => F[Option[B]]) => F[B]` | `flatMapF`  | `F: Monad` |
+| `OT[F, A] => (A => F[Option[B]]) => OT[F,B]` | `flatMapF`  | `F: Monad` |
 | `OT[F, A] => A => F[A]` | `getOrElse` | `F: Functor`  |
 | `OT[F, A] => F[A] => F[A]` | `getOrElseF` | `F: Monad`  |
 | `OT[F, A] => OT[F, A] => OT[F, A]` |
@@ -279,7 +284,7 @@ Here, we use `Ki` as a short-hand for `Kleisli`.
 | `F[A, B] => F[C, A] => F[C, B]` | `compose` | `<<<` |
 | `F[A, B] => F[B, C] => F[A, C]` | `andThen` | `>>>` |
 | `=> F[A,A]` | `id`  |
-| `F[A, B] => F[C, B] => F[Either[A, C], B]` | `choice` | `|||`
+| `F[A, B] => F[C, B] => F[Either[A, C], B]` | `choice` | `|||` |
 | `=> F[ Either[A, A], A]` | `codiagonal` |
 
 #### Arrow

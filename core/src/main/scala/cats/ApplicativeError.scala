@@ -41,7 +41,7 @@ trait ApplicativeError[F[_], E] extends Applicative[F] {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    *
    * // integer-rounded division
    * scala> def divide[F[_]](dividend: Int, divisor: Int)(implicit F: ApplicativeError[F, String]): F[Int] =
@@ -322,7 +322,7 @@ trait ApplicativeError[F[_], E] extends Applicative[F] {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> import cats.ApplicativeError
    * scala> val F = ApplicativeError[Either[String, *], String]
    *
@@ -344,7 +344,7 @@ trait ApplicativeError[F[_], E] extends Applicative[F] {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> import cats.ApplicativeError
    *
    * scala> ApplicativeError[Option, Unit].fromValidated(1.valid[Unit])
@@ -365,7 +365,7 @@ object ApplicativeError {
   def apply[F[_], E](implicit F: ApplicativeError[F, E]): ApplicativeError[F, E] = F
 
   final private[cats] class LiftFromOptionPartially[F[_]](private val dummy: Boolean = true) extends AnyVal {
-    def apply[E, A](oa: Option[A], ifEmpty: => E)(implicit F: ApplicativeError[F, _ >: E]): F[A] =
+    def apply[E, A](oa: Option[A], ifEmpty: => E)(implicit F: ApplicativeError[F, ? >: E]): F[A] =
       oa match {
         case Some(a) => F.pure(a)
         case None    => F.raiseError(ifEmpty)
@@ -388,7 +388,7 @@ object ApplicativeError {
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> import cats.ApplicativeError
    *
    * scala> ApplicativeError.liftFromOption[Either[String, *]](Some(1), "Empty")

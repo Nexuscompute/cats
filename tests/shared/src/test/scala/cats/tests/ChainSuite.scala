@@ -43,7 +43,9 @@ class ChainSuite extends CatsSuite {
   checkAll("Chain[Int]", AlternativeTests[Chain].alternative[Int, Int, Int])
   checkAll("Alternative[Chain]", SerializableTests.serializable(Alternative[Chain]))
 
+  // Traverse behaviour discriminates on the Runtime type of the Applicative
   checkAll("Chain[Int] with Option", TraverseTests[Chain].traverse[Int, Int, Int, Set[Int], Option, Option])
+  checkAll("Chain[Int] with Eval", TraverseTests[Chain].traverse[Int, Int, Int, Set[Int], Eval, Eval])
   checkAll("Traverse[Chain]", SerializableTests.serializable(Traverse[Chain]))
 
   checkAll("Chain[Int]", MonadTests[Chain].monad[Int, Int, Int])
@@ -444,6 +446,40 @@ class ChainSuite extends CatsSuite {
   test("foldRight(b)(fn) == toList.foldRight(b)(fn)") {
     forAll { (chain: Chain[Int], init: Long, fn: (Int, Long) => Long) =>
       assert(chain.foldRight(init)(fn) == chain.toList.foldRight(init)(fn))
+    }
+  }
+
+  private val genChainDropTakeArgs =
+    Arbitrary.arbitrary[Chain[Int]].flatMap { chain =>
+      // Bias to values close to the length
+      Gen
+        .oneOf(
+          Gen.choose(Int.MinValue, Int.MaxValue),
+          Gen.choose(-1, chain.length.toInt + 1)
+        )
+        .map((chain, _))
+    }
+
+  test("drop(cnt).toList == toList.drop(cnt)") {
+    forAll(genChainDropTakeArgs) { case (chain: Chain[Int], count: Int) =>
+      assertEquals(chain.drop(count).toList, chain.toList.drop(count))
+    }
+  }
+
+  test("dropRight(cnt).toList == toList.dropRight(cnt)") {
+    forAll(genChainDropTakeArgs) { case (chain: Chain[Int], count: Int) =>
+      assertEquals(chain.dropRight(count).toList, chain.toList.dropRight(count))
+    }
+  }
+  test("take(cnt).toList == toList.take(cnt)") {
+    forAll(genChainDropTakeArgs) { case (chain: Chain[Int], count: Int) =>
+      assertEquals(chain.take(count).toList, chain.toList.take(count))
+    }
+  }
+
+  test("takeRight(cnt).toList == toList.takeRight(cnt)") {
+    forAll(genChainDropTakeArgs) { case (chain: Chain[Int], count: Int) =>
+      assertEquals(chain.takeRight(count).toList, chain.toList.takeRight(count))
     }
   }
 }

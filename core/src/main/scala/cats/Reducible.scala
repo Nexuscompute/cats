@@ -21,7 +21,6 @@
 
 package cats
 
-import cats.Foldable.Source
 import cats.data.{Ior, NonEmptyList}
 
 /**
@@ -202,31 +201,47 @@ trait Reducible[F[_]] extends Foldable[F] { self =>
    * `A` values will be mapped into `G[B]` and combined using
    * `Apply#map2`.
    *
-   * This method is similar to [[Foldable.traverse_]]. There are two
+   * This method is similar to [[Foldable.traverseVoid]]. There are two
    * main differences:
    *
    * 1. We only need an [[Apply]] instance for `G` here, since we
    * don't need to call [[Applicative.pure]] for a starting value.
    * 2. This performs a strict left-associative traversal and thus
    * must always traverse the entire data structure. Prefer
-   * [[Foldable.traverse_]] if you have an [[Applicative]] instance
+   * [[Foldable.traverseVoid]] if you have an [[Applicative]] instance
    * available for `G` and want to take advantage of short-circuiting
    * the traversal.
    */
-  def nonEmptyTraverse_[G[_], A, B](fa: F[A])(f: A => G[B])(implicit G: Apply[G]): G[Unit] = {
+  def nonEmptyTraverseVoid[G[_], A, B](fa: F[A])(f: A => G[B])(implicit G: Apply[G]): G[Unit] = {
     val f1 = f.andThen(G.void)
     reduceRightTo(fa)(f1)((x, y) => G.map2Eval(f1(x), y)((_, b) => b)).value
   }
 
   /**
+   * Alias for `nonEmptyTraverseVoid`.
+   *
+   * @deprecated this method should be considered as deprecated and replaced by `nonEmptyTraverseVoid`.
+   */
+  def nonEmptyTraverse_[G[_], A, B](fa: F[A])(f: A => G[B])(implicit G: Apply[G]): G[Unit] =
+    nonEmptyTraverseVoid(fa)(f)
+
+  /**
    * Sequence `F[G[A]]` using `Apply[G]`.
    *
-   * This method is similar to [[Foldable.sequence_]] but requires only
+   * This method is similar to [[Foldable.sequenceVoid]] but requires only
    * an [[Apply]] instance for `G` instead of [[Applicative]]. See the
-   * [[nonEmptyTraverse_]] documentation for a description of the differences.
+   * [[nonEmptyTraverseVoid]] documentation for a description of the differences.
+   */
+  def nonEmptySequenceVoid[G[_], A](fga: F[G[A]])(implicit G: Apply[G]): G[Unit] =
+    nonEmptyTraverseVoid(fga)(identity)
+
+  /**
+   * Alias for `nonEmptySequenceVoid`.
+   *
+   * @deprecated this method should be considered as deprecated and replaced by `nonEmptySequenceVoid`.
    */
   def nonEmptySequence_[G[_], A](fga: F[G[A]])(implicit G: Apply[G]): G[Unit] =
-    nonEmptyTraverse_(fga)(identity)
+    nonEmptySequenceVoid(fga)
 
   def toNonEmptyList[A](fa: F[A]): NonEmptyList[A] =
     reduceRightTo(fa)(a => NonEmptyList(a, Nil)) { (a, lnel) =>
@@ -399,10 +414,14 @@ object Reducible {
       typeClassInstance.reduceMapM[G, A, B](self)(f)(G, B)
     def reduceRightTo[B](f: A => B)(g: (A, Eval[B]) => Eval[B]): Eval[B] =
       typeClassInstance.reduceRightTo[A, B](self)(f)(g)
+    def nonEmptyTraverseVoid[G[_], B](f: A => G[B])(implicit G: Apply[G]): G[Unit] =
+      typeClassInstance.nonEmptyTraverseVoid[G, A, B](self)(f)
     def nonEmptyTraverse_[G[_], B](f: A => G[B])(implicit G: Apply[G]): G[Unit] =
-      typeClassInstance.nonEmptyTraverse_[G, A, B](self)(f)(G)
+      nonEmptyTraverseVoid[G, B](f)
+    def nonEmptySequenceVoid[G[_], B](implicit ev$1: A <:< G[B], G: Apply[G]): G[Unit] =
+      typeClassInstance.nonEmptySequenceVoid[G, B](self.asInstanceOf[F[G[B]]])
     def nonEmptySequence_[G[_], B](implicit ev$1: A <:< G[B], G: Apply[G]): G[Unit] =
-      typeClassInstance.nonEmptySequence_[G, B](self.asInstanceOf[F[G[B]]])(G)
+      nonEmptySequenceVoid[G, B]
     def toNonEmptyList: NonEmptyList[A] = typeClassInstance.toNonEmptyList[A](self)
     def minimum(implicit A: Order[A]): A = typeClassInstance.minimum[A](self)(A)
     def maximum(implicit A: Order[A]): A = typeClassInstance.maximum[A](self)(A)
@@ -434,104 +453,4 @@ object Reducible {
   @deprecated("Use cats.syntax object imports", "2.2.0")
   object nonInheritedOps extends ToReducibleOps
 
-}
-
-/**
- * This class defines a `Reducible[F]` in terms of a `Foldable[G]`
- * together with a `split` method, `F[A]` => `(A, G[A])`.
- *
- * This class can be used on any type where the first value (`A`) and
- * the "rest" of the values (`G[A]`) can be easily found.
- *
- * This class is only a helper, does not define a typeclass and should not be used outside of Cats.
- * Also see the discussion: PR #3541 and issue #3069.
- */
-abstract class NonEmptyReducible[F[_], G[_]](implicit G: Foldable[G]) extends Reducible[F] {
-  def split[A](fa: F[A]): (A, G[A])
-
-  def foldLeft[A, B](fa: F[A], b: B)(f: (B, A) => B): B = {
-    val (a, ga) = split(fa)
-    G.foldLeft(ga, f(b, a))(f)
-  }
-
-  def foldRight[A, B](fa: F[A], lb: Eval[B])(f: (A, Eval[B]) => Eval[B]): Eval[B] =
-    Always(split(fa)).flatMap { case (a, ga) =>
-      f(a, G.foldRight(ga, lb)(f))
-    }
-
-  def reduceLeftTo[A, B](fa: F[A])(f: A => B)(g: (B, A) => B): B = {
-    val (a, ga) = split(fa)
-    G.foldLeft(ga, f(a))((b, a) => g(b, a))
-  }
-
-  def reduceRightTo[A, B](fa: F[A])(f: A => B)(g: (A, Eval[B]) => Eval[B]): Eval[B] = {
-    def loop(now: A, source: Source[A]): Eval[B] =
-      source.uncons match {
-        case Some((next, s)) => g(now, Eval.defer(loop(next, s.value)))
-        case None            => Eval.later(f(now))
-      }
-
-    Always(split(fa)).flatMap { case (a, ga) =>
-      Eval.defer(loop(a, Foldable.Source.fromFoldable(ga)))
-    }
-  }
-
-  override def size[A](fa: F[A]): Long = {
-    val (_, tail) = split(fa)
-    1 + G.size(tail)
-  }
-
-  override def get[A](fa: F[A])(idx: Long): Option[A] =
-    if (idx == 0L) Some(split(fa)._1) else G.get(split(fa)._2)(idx - 1L)
-
-  override def fold[A](fa: F[A])(implicit A: Monoid[A]): A = {
-    val (a, ga) = split(fa)
-    A.combine(a, G.fold(ga))
-  }
-
-  override def foldM[H[_], A, B](fa: F[A], z: B)(f: (B, A) => H[B])(implicit H: Monad[H]): H[B] = {
-    val (a, ga) = split(fa)
-    H.flatMap(f(z, a))(G.foldM(ga, _)(f))
-  }
-
-  override def find[A](fa: F[A])(f: A => Boolean): Option[A] = {
-    val (a, ga) = split(fa)
-    if (f(a)) Some(a) else G.find(ga)(f)
-  }
-
-  override def exists[A](fa: F[A])(p: A => Boolean): Boolean = {
-    val (a, ga) = split(fa)
-    p(a) || G.exists(ga)(p)
-  }
-
-  override def forall[A](fa: F[A])(p: A => Boolean): Boolean = {
-    val (a, ga) = split(fa)
-    p(a) && G.forall(ga)(p)
-  }
-
-  override def toList[A](fa: F[A]): List[A] = {
-    val (a, ga) = split(fa)
-    a :: G.toList(ga)
-  }
-
-  override def toNonEmptyList[A](fa: F[A]): NonEmptyList[A] = {
-    val (a, ga) = split(fa)
-    NonEmptyList(a, G.toList(ga))
-  }
-
-  override def filter_[A](fa: F[A])(p: A => Boolean): List[A] = {
-    val (a, ga) = split(fa)
-    val filteredTail = G.filter_(ga)(p)
-    if (p(a)) a :: filteredTail else filteredTail
-  }
-
-  override def takeWhile_[A](fa: F[A])(p: A => Boolean): List[A] = {
-    val (a, ga) = split(fa)
-    if (p(a)) a :: G.takeWhile_(ga)(p) else Nil
-  }
-
-  override def dropWhile_[A](fa: F[A])(p: A => Boolean): List[A] = {
-    val (a, ga) = split(fa)
-    if (p(a)) G.dropWhile_(ga)(p) else a :: G.toList(ga)
-  }
 }

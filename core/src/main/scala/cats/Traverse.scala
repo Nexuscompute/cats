@@ -21,8 +21,10 @@
 
 package cats
 
+import cats.data.Chain
 import cats.data.State
 import cats.data.StateT
+import cats.kernel.compat.scalaVersionSpecific._
 
 /**
  * Traverse, also known as Traversable.
@@ -44,7 +46,7 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] with UnorderedTraverse[
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> def parseInt(s: String): Option[Int] = Either.catchOnly[NumberFormatException](s.toInt).toOption
    * scala> List("1", "2", "3").traverse(parseInt)
    * res0: Option[List[Int]] = Some(List(1, 2, 3))
@@ -62,7 +64,7 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] with UnorderedTraverse[
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> import java.io.IOException
    * scala> type IO[A] = Either[IOException, A]
    * scala> def debug(msg: String): IO[Unit] = Right(())
@@ -78,7 +80,7 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] with UnorderedTraverse[
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> def parseInt(s: String): Option[Int] = Either.catchOnly[NumberFormatException](s.toInt).toOption
    * scala> val x = Option(List("1", "two", "3"))
    * scala> x.flatTraverse(_.map(parseInt))
@@ -94,7 +96,7 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] with UnorderedTraverse[
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val x: List[Option[Int]] = List(Some(1), Some(2))
    * scala> val y: List[Option[Int]] = List(None, Some(2))
    * scala> x.sequence
@@ -112,7 +114,7 @@ trait Traverse[F[_]] extends Functor[F] with Foldable[F] with UnorderedTraverse[
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val x: List[Option[List[Int]]] = List(Some(List(1, 2)), Some(List(3)))
    * scala> val y: List[Option[List[Int]]] = List(None, Some(List(3)))
    * scala> x.flatSequence
@@ -283,5 +285,27 @@ object Traverse {
   }
   @deprecated("Use cats.syntax object imports", "2.2.0")
   object nonInheritedOps extends ToTraverseOps
+
+  private[cats] def traverseDirectly[G[_], A, B](
+    fa: IterableOnce[A]
+  )(f: A => G[B])(implicit G: StackSafeMonad[G]): G[Chain[B]] = {
+    fa.iterator.foldLeft(G.pure(Chain.empty[B])) { case (accG, a) =>
+      G.map2(accG, f(a)) { case (acc, x) =>
+        acc :+ x
+      }
+    }
+  }
+
+  private[cats] def traverseVoidDirectly[G[_], A, B](
+    fa: IterableOnce[A]
+  )(f: A => G[B])(implicit G: StackSafeMonad[G]): G[Unit] = {
+    val iter = fa.iterator
+    if (iter.hasNext) {
+      val first = iter.next()
+      G.void(iter.foldLeft(f(first)) { case (g, a) =>
+        G.productR(g)(f(a))
+      })
+    } else G.unit
+  }
 
 }

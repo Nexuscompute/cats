@@ -194,6 +194,12 @@ final class EitherOps[A, B](private val eab: Either[A, B]) extends AnyVal {
       case r @ Right(_) => EitherUtil.leftCast(r)
     }
 
+  def leftMapOrKeep[AA >: A](pf: PartialFunction[A, AA]): Either[AA, B] =
+    eab match {
+      case Left(a)        => Left(pf.applyOrElse(a, identity[AA]))
+      case r: Right[A, B] => r
+    }
+
   @deprecated("Included in the standard library", "2.1.0-RC1")
   private[syntax] def flatMap[AA >: A, D](f: B => Either[AA, D]): Either[AA, D] =
     eab match {
@@ -205,6 +211,12 @@ final class EitherOps[A, B](private val eab: Either[A, B]) extends AnyVal {
     eab match {
       case Left(a)      => f(a)
       case r @ Right(_) => EitherUtil.leftCast(r)
+    }
+
+  def leftFlatMapOrKeep[AA >: A, BB >: B](pfa: PartialFunction[A, Either[AA, BB]]): Either[AA, BB] =
+    eab match {
+      case l @ Left(a)    => pfa.applyOrElse(a, (_: A) => l)
+      case r: Right[A, B] => r
     }
 
   def compare[AA >: A, BB >: B](that: Either[AA, BB])(implicit AA: Order[AA], BB: Order[BB]): Int =
@@ -282,7 +294,7 @@ final class EitherOps[A, B](private val eab: Either[A, B]) extends AnyVal {
    *
    * Examples:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val l1: Either[String, Int] = Either.left("error 1")
    * scala> val l2: Either[String, Int] = Either.left("error 2")
    * scala> val r3: Either[String, Int] = Either.right(3)
@@ -323,7 +335,7 @@ final class EitherOps[A, B](private val eab: Either[A, B]) extends AnyVal {
    * Transform the `Either` into a [[cats.data.EitherT]] while lifting it into the specified Applicative.
    *
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val e: Either[String, Int] = Right(3)
    * scala> e.toEitherT[Option]
    * res0: cats.data.EitherT[Option, String, Int] = EitherT(Some(Right(3)))
@@ -345,14 +357,14 @@ final class EitherOps[A, B](private val eab: Either[A, B]) extends AnyVal {
    * lift the `Either` into a `F[_]` with `ApplicativeError[F, A]` instance
    *
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> import cats.data.EitherT
    * scala> val e: Either[String, Int] = Right(3)
    * scala> e.liftTo[EitherT[Option, CharSequence, *]]
    * res0: cats.data.EitherT[Option, CharSequence, Int] = EitherT(Some(Right(3)))
    * }}}
    */
-  def liftTo[F[_]](implicit F: ApplicativeError[F, _ >: A]): F[B] = F.fromEither(eab)
+  def liftTo[F[_]](implicit F: ApplicativeError[F, ? >: A]): F[B] = F.fromEither(eab)
 }
 
 final class EitherObjectOps(private val either: Either.type) extends AnyVal {
@@ -378,7 +390,7 @@ final class EitherObjectOps(private val either: Either.type) extends AnyVal {
    *
    * For example:
    * {{{
-   * scala> import cats.implicits._ // get syntax for Either
+   * scala> import cats.syntax.all._ // get syntax for Either
    * scala> Either.catchOnly[NumberFormatException] { "foo".toInt }
    * res0: Either[NumberFormatException, Int] = Left(java.lang.NumberFormatException: For input string: "foo")
    * }}}
@@ -416,6 +428,30 @@ final class EitherObjectOps(private val either: Either.type) extends AnyVal {
    * Cached value of `Right(())` to avoid allocations for a common case.
    */
   def unit[A]: Either[A, Unit] = EitherUtil.unit
+
+  /**
+   * Returns `Left(ifTrue)` when the `cond` is true, otherwise `Right(())`
+   *
+   * @example {{{
+   * val tooMany = 5
+   * val x: Int = ???
+   * Either.raiseWhen(x >= tooMany)(new IllegalArgumentException("Too many"))
+   * }}}
+   */
+  def raiseWhen[A](cond: Boolean)(ifTrue: => A): Either[A, Unit] =
+    ApplicativeError[Either[A, *], A].raiseWhen(cond)(ifTrue)
+
+  /**
+   * Returns `Left(ifFalse)` when `cond` is false, otherwise `Right(())`
+   *
+   * @example {{{
+   * val tooMany = 5
+   * val x: Int = ???
+   * Either.raiseUnless(x < tooMany)(new IllegalArgumentException("Too many"))
+   * }}}
+   */
+  def raiseUnless[A](cond: Boolean)(ifFalse: => A): Either[A, Unit] =
+    ApplicativeError[Either[A, *], A].raiseUnless(cond)(ifFalse)
 }
 
 final class LeftOps[A, B](private val left: Left[A, B]) extends AnyVal {
@@ -451,7 +487,7 @@ final class EitherIdOps[A](private val obj: A) extends AnyVal {
    *
    * For example:
    * {{{
-   * scala> import cats.implicits._, cats.data.NonEmptyList
+   * scala> import cats.syntax.all._, cats.data.NonEmptyList
    * scala> "Err".leftNel[Int]
    * res0: Either[NonEmptyList[String], Int] = Left(NonEmptyList(Err))
    * }}}
@@ -463,7 +499,7 @@ final class EitherIdOps[A](private val obj: A) extends AnyVal {
    *
    * For example:
    * {{{
-   * scala> import cats.implicits._, cats.data.NonEmptyList
+   * scala> import cats.syntax.all._, cats.data.NonEmptyList
    * scala> 1.rightNel[String]
    * res0: Either[NonEmptyList[String], Int] = Right(1)
    * }}}
@@ -487,7 +523,7 @@ final private[syntax] class EitherIdOpsBinCompat0[A](private val value: A) exten
    *
    * For example:
    * {{{
-   * scala> import cats.implicits._, cats.data.NonEmptyChain
+   * scala> import cats.syntax.all._, cats.data.NonEmptyChain
    * scala> "Err".leftNec[Int]
    * res0: Either[NonEmptyChain[String], Int] = Left(Chain(Err))
    * }}}
@@ -499,7 +535,7 @@ final private[syntax] class EitherIdOpsBinCompat0[A](private val value: A) exten
    *
    * For example:
    * {{{
-   * scala> import cats.implicits._, cats.data.NonEmptyChain
+   * scala> import cats.syntax.all._, cats.data.NonEmptyChain
    * scala> 1.rightNec[String]
    * res0: Either[NonEmptyChain[String], Int] = Right(1)
    * }}}

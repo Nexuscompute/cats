@@ -41,7 +41,7 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    *
    * Example:
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    *
    * scala> val m: Map[Int, String] = Map(1 -> "hi", 2 -> "there", 3 -> "you")
    *
@@ -64,12 +64,11 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    *
    * Example:
    * {{{
-   * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForOption
+   * scala> import cats.syntax.all._
    *
-   * scala> val s = Some(42)
-   * scala> Functor[Option].widen(s)
-   * res0: Option[Int] = Some(42)
+   * scala> val l = List(Some(42))
+   * scala> l.widen[Option[Int]]
+   * res0: List[Option[Int]] = List(Some(42))
    * }}}
    */
   def widen[A, B >: A](fa: F[A]): F[B] = fa.asInstanceOf[F[B]]
@@ -80,7 +79,7 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    * Example:
    * {{{
    * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForOption
+   * scala> import cats.syntax.all._
    *
    * scala> val o = Option(42)
    * scala> Functor[Option].lift((x: Int) => x + 10)(o)
@@ -94,10 +93,9 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    *
    * Example:
    * {{{
-   * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForList
+   * scala> import cats.syntax.all._
    *
-   * scala> Functor[List].void(List(1,2,3))
+   * scala> List(1,2,3).void
    * res0: List[Unit] = List((), (), ())
    * }}}
    */
@@ -109,10 +107,9 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    *
    * Example:
    * {{{
-   * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForOption
+   * scala> import cats.syntax.all._
    *
-   * scala> Functor[Option].fproduct(Option(42))(_.toString)
+   * scala> Option(42).fproduct(_.toString)
    * res0: Option[(Int, String)] = Some((42,42))
    * }}}
    */
@@ -123,10 +120,9 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    *
    * Example:
    * {{{
-   * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForOption
+   * scala> import cats.syntax.all._
    *
-   * scala> Functor[Option].fproductLeft(Option(42))(_.toString)
+   * scala> Option(42).fproductLeft(_.toString)
    * res0: Option[(String, Int)] = Some((42,42))
    * }}}
    */
@@ -138,10 +134,9 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    * Example:
    *
    * {{{
-   * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForList
+   * scala> import cats.syntax.all._
    *
-   * scala> Functor[List].as(List(1,2,3), "hello")
+   * scala> List(1,2,3).as("hello")
    * res0: List[String] = List(hello, hello, hello)
    * }}}
    */
@@ -153,10 +148,9 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    * Example:
    * {{{
    * scala> import scala.collection.immutable.Queue
-   * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForQueue
+   * scala> import cats.syntax.all._
    *
-   * scala> Functor[Queue].tupleLeft(Queue("hello", "world"), 42)
+   * scala> Queue("hello", "world").tupleLeft(42)
    * res0: scala.collection.immutable.Queue[(Int, String)] = Queue((42,hello), (42,world))
    * }}}
    */
@@ -168,14 +162,25 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    * Example:
    * {{{
    * scala> import scala.collection.immutable.Queue
-   * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForQueue
+   * scala> import cats.syntax.all._
    *
-   * scala> Functor[Queue].tupleRight(Queue("hello", "world"), 42)
+   * scala> Queue("hello", "world").tupleRight(42)
    * res0: scala.collection.immutable.Queue[(String, Int)] = Queue((hello,42), (world,42))
    * }}}
    */
   def tupleRight[A, B](fa: F[A], b: B): F[(A, B)] = map(fa)(a => (a, b))
+
+  /**
+   * Modifies the `A` value in `F[A]` with the supplied function, if the function is defined for the value.
+   * Example:
+   * {{{
+   * scala> import cats.syntax.all._
+   *
+   * scala> List(1, 2, 3).mapOrKeep { case 2 => 42 }
+   * res0: List[Int] = List(1, 42, 3)
+   * }}}
+   */
+  def mapOrKeep[A, A1 >: A](fa: F[A])(pf: PartialFunction[A, A1]): F[A1] = map(fa)(a => pf.applyOrElse(a, identity[A1]))
 
   /**
    * Un-zips an `F[(A, B)]` consisting of element pairs or Tuple2 into two separate F's tupled.
@@ -184,13 +189,12 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    *
    * {{{
    * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForList
+   * scala> import cats.syntax.all._
    *
    * scala> Functor[List].unzip(List((1,2), (3, 4)))
    * res0: (List[Int], List[Int]) = (List(1, 3),List(2, 4))
    * }}}
    */
-
   def unzip[A, B](fab: F[(A, B)]): (F[A], F[B]) = (map(fab)(_._1), map(fab)(_._2))
 
   /**
@@ -199,19 +203,24 @@ trait Functor[F[_]] extends Invariant[F] { self =>
    * Example:
    * {{{
    * scala> import cats.Functor
-   * scala> import cats.implicits.catsStdInstancesForList
+   * scala> import cats.syntax.all._
    *
    * scala> Functor[List].ifF(List(true, false, false))(1, 0)
    * res0: List[Int] = List(1, 0, 0)
    * }}}
    */
-
   def ifF[A](fb: F[Boolean])(ifTrue: => A, ifFalse: => A): F[A] = map(fb)(x => if (x) ifTrue else ifFalse)
 
   def compose[G[_]: Functor]: Functor[λ[α => F[G[α]]]] =
     new ComposedFunctor[F, G] {
       val F = self
       val G = Functor[G]
+    }
+
+  def composeBifunctor[G[_, _]: Bifunctor]: Bifunctor[λ[(α, β) => F[G[α, β]]]] =
+    new ComposedFunctorBifunctor[F, G] {
+      val F = self
+      val G = Bifunctor[G]
     }
 
   override def composeContravariant[G[_]: Contravariant]: Contravariant[λ[α => F[G[α]]]] =
@@ -252,6 +261,7 @@ object Functor {
     def as[B](b: B): F[B] = typeClassInstance.as[A, B](self, b)
     def tupleLeft[B](b: B): F[(B, A)] = typeClassInstance.tupleLeft[A, B](self, b)
     def tupleRight[B](b: B): F[(A, B)] = typeClassInstance.tupleRight[A, B](self, b)
+    def mapOrKeep[A1 >: A](pf: PartialFunction[A, A1]): F[A1] = typeClassInstance.mapOrKeep[A, A1](self)(pf)
   }
   trait AllOps[F[_], A] extends Ops[F, A] with Invariant.AllOps[F, A] {
     type TypeClassType <: Functor[F]

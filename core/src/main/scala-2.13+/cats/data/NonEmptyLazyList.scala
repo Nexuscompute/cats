@@ -38,7 +38,7 @@ object NonEmptyLazyList extends NonEmptyLazyListInstances {
   private[data] type Base
   private[data] trait Tag extends Any
   /* aliased in data package as NonEmptyLazyList */
-  type Type[+A] <: Base with Tag
+  type Type[+A] <: Base & Tag
 
   private[data] def create[A](s: LazyList[A]): Type[A] =
     s.asInstanceOf[Type[A]]
@@ -345,14 +345,17 @@ class NonEmptyLazyListOps[A](private val value: NonEmptyLazyList[A])
   /**
    * Remove duplicates. Duplicates are checked using `Order[_]` instance.
    */
-  def distinct[AA >: A](implicit O: Order[AA]): NonEmptyLazyList[AA] = {
-    implicit val ord: Ordering[AA] = O.toOrdering
+  override def distinct[AA >: A](implicit O: Order[AA]): NonEmptyLazyList[AA] = distinctBy(identity[AA])
 
-    val buf = LazyList.newBuilder[AA]
-    toLazyList.foldLeft(TreeSet.empty[AA]) { (elementsSoFar, a) =>
-      if (elementsSoFar(a)) elementsSoFar
+  override def distinctBy[B](f: A => B)(implicit O: Order[B]): NonEmptyLazyList[A] = {
+    implicit val ord: Ordering[B] = O.toOrdering
+
+    val buf = LazyList.newBuilder[A]
+    toLazyList.foldLeft(TreeSet.empty[B]) { (elementsSoFar, a) =>
+      val b = f(a)
+      if (elementsSoFar(b)) elementsSoFar
       else {
-        buf += a; elementsSoFar + a
+        buf += a; elementsSoFar + b
       }
     }
 
@@ -395,7 +398,7 @@ class NonEmptyLazyListOps[A](private val value: NonEmptyLazyList[A])
    * {{{
    * scala> import scala.collection.immutable.SortedMap
    * scala> import cats.data.NonEmptyLazyList
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val nel = NonEmptyLazyList(12, -2, 3, -5)
    * scala> val expectedResult = SortedMap(false -> NonEmptyLazyList(-2, -5), true -> NonEmptyLazyList(12, 3))
    * scala> val result = nel.groupBy(_ >= 0)
@@ -427,7 +430,7 @@ class NonEmptyLazyListOps[A](private val value: NonEmptyLazyList[A])
    *
    * {{{
    * scala> import cats.data.{NonEmptyLazyList, NonEmptyMap}
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val nel = NonEmptyLazyList(12, -2, 3, -5)
    * scala> val expectedResult = NonEmptyMap.of(false -> NonEmptyLazyList(-2, -5), true -> NonEmptyLazyList(12, 3))
    * scala> val result = nel.groupByNem(_ >= 0)
@@ -443,7 +446,7 @@ class NonEmptyLazyListOps[A](private val value: NonEmptyLazyList[A])
    *
    * {{{
    * scala> import cats.data.NonEmptyLazyList
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val nel = NonEmptyLazyList.fromLazyListUnsafe(LazyList(12, -2, 3, -5))
    * scala> val expectedResult = List(
    *      |   NonEmptyLazyList.fromLazyListUnsafe(LazyList(12, -2)),
@@ -463,7 +466,7 @@ class NonEmptyLazyListOps[A](private val value: NonEmptyLazyList[A])
    * Creates new `NonEmptyMap`, similarly to List#toMap from scala standard library.
    * {{{
    * scala> import cats.data.{NonEmptyLazyList, NonEmptyMap}
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> val nel = NonEmptyLazyList.fromLazyListPrepend((0, "a"), LazyList((1, "b"),(0, "c"), (2, "d")))
    * scala> val expectedResult = NonEmptyMap.of(0 -> "c", 1 -> "b", 2 -> "d")
    * scala> val result = nel.toNem
@@ -507,10 +510,9 @@ class NonEmptyLazyListOps[A](private val value: NonEmptyLazyList[A])
 
 sealed abstract private[data] class NonEmptyLazyListInstances extends NonEmptyLazyListInstances1 {
 
-  implicit val catsDataInstancesForNonEmptyLazyList: Bimonad[NonEmptyLazyList]
-    with NonEmptyTraverse[NonEmptyLazyList]
-    with NonEmptyAlternative[NonEmptyLazyList]
-    with Align[NonEmptyLazyList] =
+  implicit val catsDataInstancesForNonEmptyLazyList: Bimonad[NonEmptyLazyList] & NonEmptyTraverse[
+    NonEmptyLazyList
+  ] & NonEmptyAlternative[NonEmptyLazyList] & Align[NonEmptyLazyList] =
     new AbstractNonEmptyInstances[LazyList, NonEmptyLazyList] with Align[NonEmptyLazyList] {
 
       def extract[A](fa: NonEmptyLazyList[A]): A = fa.head

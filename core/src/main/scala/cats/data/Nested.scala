@@ -32,7 +32,7 @@ package data
  * {{{
  * scala> import cats.Functor
  * scala> import cats.data.Nested
- * scala> import cats.implicits._
+ * scala> import cats.syntax.all._
  * scala> val listOption: List[Option[Int]] = List(Some(1), None)
  * scala> val f: Int => String = i => (i * 2).toString
  * scala> Functor[List].map(listOption)(opt => opt.map(f))
@@ -117,7 +117,7 @@ sealed abstract private[data] class NestedInstances0 extends NestedInstances1 {
   ): Representable.Aux[Nested[F, G, *], (F0.Representation, G0.Representation)] = new Representable[Nested[F, G, *]] {
     val FG = F0.compose(G0)
 
-    val F = new NestedFunctor[F, G] {
+    val F: Functor[Nested[F, G, *]] = new NestedFunctor[F, G] {
       val FG = F0.F.compose(G0.F)
     }
 

@@ -127,7 +127,7 @@ final class IndexedStateT[F[_], SA, SB, A](val runF: F[SA => F[(SB, A)]]) extend
    * Like [[transform]], but allows the context to change from `F` to `G`.
    *
    * {{{
-   * scala> import cats.implicits._
+   * scala> import cats.syntax.all._
    * scala> type ErrorOr[A] = Either[String, A]
    * scala> val xError: IndexedStateT[ErrorOr, Int, Int, Int] = IndexedStateT.get
    * scala> val xOpt: IndexedStateT[Option, Int, Int, Int] = xError.transformF(_.toOption)
@@ -150,7 +150,7 @@ final class IndexedStateT[F[_], SA, SB, A](val runF: F[SA => F[(SB, A)]]) extend
    * global state containing the various states needed for each individual `StateT`.
    *
    * {{{
-   * scala> import cats.implicits._ // needed for StateT.apply
+   * scala> import cats.syntax.all._ // needed for StateT.apply
    * scala> type GlobalEnv = (Int, String)
    * scala> val x: StateT[Option, Int, Double] = StateT((x: Int) => Option((x + 1, x.toDouble)))
    * scala> val xt: StateT[Option, GlobalEnv, Double] = x.transformS[GlobalEnv](_._1, (t, i) => (i, t._2))
@@ -279,7 +279,7 @@ sealed abstract private[data] class IndexedStateTInstances extends IndexedStateT
   implicit def catsDataAlternativeForIndexedStateT[F[_], S](implicit
     FM: Monad[F],
     FA: Alternative[F]
-  ): Alternative[IndexedStateT[F, S, S, *]] with Monad[IndexedStateT[F, S, S, *]] =
+  ): Alternative[IndexedStateT[F, S, S, *]] & Monad[IndexedStateT[F, S, S, *]] =
     new IndexedStateTAlternative[F, S] { implicit def F = FM; implicit def G = FA }
 
   implicit def catsDataDeferForIndexedStateT[F[_], SA, SB](implicit F: Defer[F]): Defer[IndexedStateT[F, SA, SB, *]] =
